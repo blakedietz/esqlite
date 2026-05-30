@@ -24,6 +24,7 @@
     open/1,
     close/1,
     error_info/1,
+    load_extension/3,
 
     set_update_hook/2,
 
@@ -112,6 +113,15 @@ close(_Db) ->
     when Connection :: esqlite3_ref(),
          ErrorInfo :: error_info().
 error_info(_Db) ->
+    erlang:nif_error(nif_library_not_loaded).
+
+%% @doc Load a SQLite extension on this connection.
+-spec load_extension(Connection, Filename, EntryPoint) -> Result
+    when Connection :: esqlite3_ref(),
+         Filename :: sql(),
+         EntryPoint :: sql(),
+         Result :: ok | error() | {error, {integer(), unicode:unicode_binary()}}.
+load_extension(_Connection, _Filename, _EntryPoint) ->
     erlang:nif_error(nif_library_not_loaded).
 
 

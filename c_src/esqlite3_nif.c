@@ -25,6 +25,7 @@
 #include <sqlite3.h>
 
 #define MAX_ATOM_LENGTH 255         /* from atom.h, not exposed in erlang include */
+#define MAX_PATHNAME 512            /* unfortunately not in sqlite.h. */
 
 static ErlNifResourceType *esqlite3_type = NULL;
 static ErlNifResourceType *esqlite3_stmt_type = NULL;
@@ -80,6 +81,24 @@ make_error_tuple(ErlNifEnv *env, const char *reason)
 static ERL_NIF_TERM
 make_sqlite3_error_tuple(ErlNifEnv *env, int error_code) {
     return enif_make_tuple2(env, make_atom(env, "error"), enif_make_int(env, error_code));
+}
+
+static int
+get_string_arg(ErlNifEnv *env, ERL_NIF_TERM term, char *buffer, unsigned int buffer_size)
+{
+    ErlNifBinary binary;
+
+    if(enif_inspect_iolist_as_binary(env, term, &binary)) {
+        if(binary.size >= buffer_size) {
+            return 0;
+        }
+
+        memcpy(buffer, binary.data, binary.size);
+        buffer[binary.size] = '\0';
+        return 1;
+    }
+
+    return enif_get_string(env, term, buffer, buffer_size, ERL_NIF_LATIN1) > 0;
 }
 
 /*
@@ -308,6 +327,79 @@ esqlite_error_info(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
     enif_make_map_put(env, info, make_atom(env, "error_offset"), enif_make_int(env, sqlite3_error_offset(conn->db)), &info);
 
     return info;
+}
+
+/*
+ * Load a SQLite extension for this connection.
+ */
+static ERL_NIF_TERM
+esqlite_load_extension(ErlNifEnv *env, int argc, const ERL_NIF_TERM argv[])
+{
+    esqlite3 *conn;
+    char filename[MAX_PATHNAME];
+    char entrypoint[MAX_PATHNAME];
+    char *errmsg = NULL;
+    int rc;
+
+    if(argc != 3) {
+        return enif_make_badarg(env);
+    }
+
+    if(!enif_get_resource(env, argv[0], esqlite3_type, (void **) &conn)) {
+        return enif_make_badarg(env);
+    }
+
+    if(conn->db == NULL) {
+        return enif_make_badarg(env);
+    }
+
+    if(!get_string_arg(env, argv[1], filename, MAX_PATHNAME)) {
+        return make_error_tuple(env, "invalid_filename");
+    }
+
+    if(!get_string_arg(env, argv[2], entrypoint, MAX_PATHNAME)) {
+        return make_error_tuple(env, "invalid_entrypoint");
+    }
+
+    rc = sqlite3_db_config(conn->db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 1, NULL);
+    if(rc != SQLITE_OK) {
+        return make_sqlite3_error_tuple(env, rc);
+    }
+
+    rc = sqlite3_load_extension(
+        conn->db,
+        filename,
+        entrypoint[0] == '\0' ? NULL : entrypoint,
+        &errmsg
+    );
+
+    int disable_rc = sqlite3_db_config(conn->db, SQLITE_DBCONFIG_ENABLE_LOAD_EXTENSION, 0, NULL);
+
+    if(rc != SQLITE_OK) {
+        ERL_NIF_TERM error_message = errmsg == NULL
+            ? make_binary(env, sqlite3_errmsg(conn->db), strlen(sqlite3_errmsg(conn->db)))
+            : make_binary(env, errmsg, strlen(errmsg));
+
+        if(errmsg != NULL) {
+            sqlite3_free(errmsg);
+        }
+
+        return enif_make_tuple2(
+            env,
+            make_atom(env, "error"),
+            enif_make_tuple2(env, enif_make_int(env, rc), error_message)
+        );
+    }
+
+    if(errmsg != NULL) {
+        sqlite3_free(errmsg);
+    }
+
+    if(disable_rc != SQLITE_OK) {
+        return make_sqlite3_error_tuple(env, disable_rc);
+    }
+
+    return make_atom(env, "ok");
 }
 
 void
@@ -1262,6 +1354,8 @@ static ErlNifFunc nif_funcs[] = {
     {"backup_pagecount", 1, esqlite_backup_pagecount},
     {"backup_step", 2, esqlite_backup_step, ERL_NIF_DIRTY_JOB_IO_BOUND},
     {"backup_finish", 1, esqlite_backup_finish, ERL_NIF_DIRTY_JOB_IO_BOUND},
+
+    {"load_extension", 3, esqlite_load_extension, ERL_NIF_DIRTY_JOB_IO_BOUND},
 
     {"memory_stats", 1, esqlite_memory_stats},
     {"status", 2, esqlite_status}

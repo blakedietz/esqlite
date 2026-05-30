@@ -23,6 +23,7 @@
     close/1,
 
     error_info/1,
+    load_extension/3,
 
     %% db connection functions
     set_update_hook/2,
@@ -143,6 +144,19 @@ close(#esqlite3{db=Connection}) ->
          ErrorInfo :: esqlite3_nif:error_info().
 error_info(#esqlite3{db=Connection}) ->
     esqlite3_nif:error_info(Connection).
+
+%% @doc Load a SQLite extension on this connection.
+%%
+%% Enables the C-level extension loading API only for the duration of the
+%% load operation. Pass an empty entry point to let SQLite derive the name
+%% from the extension filename.
+-spec load_extension(Connection, Filename, EntryPoint) -> Result
+    when Connection :: esqlite3(),
+         Filename :: sql(),
+         EntryPoint :: sql(),
+         Result :: ok | error() | {error, {integer(), unicode:unicode_binary()}}.
+load_extension(#esqlite3{db=Connection}, Filename, EntryPoint) ->
+    esqlite3_nif:load_extension(Connection, Filename, EntryPoint).
 
 %% @doc Interrupt a long running query. See [https://sqlite.org/c3ref/interrupt.html] for more details.
 -spec interrupt(Connection) -> Result 
