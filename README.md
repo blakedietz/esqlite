@@ -1,6 +1,17 @@
 Esqlite ![Test](https://github.com/mmzeeman/esqlite/workflows/Test/badge.svg)
 =======
 
+> **Fork note**
+>
+> This fork (branch `load-extension`) adds `esqlite3:load_extension/3` for
+> loading SQLite run-time extensions, and a `gleam.toml` so the package can be
+> consumed as a Gleam git dependency. It is used together with the matching
+> [sqlight fork](https://github.com/blakedietz/sqlight/tree/load-extension).
+>
+> The C NIF is **not** built by Gleam when this package is used as a git
+> dependency — build it with `make compile` (which runs `rebar3 compile`)
+> after fetching, e.g. `cd build/packages/esqlite && make compile`.
+
 An Erlang nif library for sqlite3.
 
 Introduction

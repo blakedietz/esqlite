@@ -2,9 +2,9 @@ name: Test
 
 on:
   push:
-    branches: [ master ]
+    branches: [ master, load-extension ]
   pull_request:
-    branches: [ master ]
+    branches: [ master, load-extension ]
 
 jobs:
   linux:
